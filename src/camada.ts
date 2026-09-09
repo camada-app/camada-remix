@@ -65,7 +65,13 @@ export function camada(opts: CamadaRemixOptions = {}): MiddlewareFunction<Respon
     try {
       res = await next();
     } catch (err) {
-      cam.after(request, r.vars, null);   // a resource route threw past the router: its error handler owns the status, camada cannot see it
+      // A thrown Response (a redirect from a downstream middleware) is the answer, so it carries
+      // the status and the cookie; anything else lands in the router's error boundary as a 500.
+      if (err instanceof Response) {
+        cam.after(request, r.vars, err.status);
+        throw r.vars.sessionCookie ? withSetCookie(err, r.vars.sessionCookie) : err;
+      }
+      cam.after(request, r.vars, 500);
       throw err;
     }
     cam.after(request, r.vars, res.status);
