@@ -5,28 +5,20 @@
 // both helpers stand down.
 import { createContext, type RouterContextProvider } from 'react-router';
 import { guarded } from '@camada/core';
-import type { FetchCamada, FetchVars } from '@camada/core/fetch';
+import { track as coreTrack, scriptTag as coreScriptTag, type FetchVars } from '@camada/core/fetch';
 
 // Defaults are null, not undefined: React Router's `get()` throws on a context that has neither
 // a value nor a default, and the helpers must stand down silently where the middleware did not run.
-/** The vars the middleware kept for this request; null where it did not run. */
+/** The vars the middleware kept for this request; null where it did not run. Private to the package: track() and scriptTag() are the API. */
 export const camadaContext = createContext<FetchVars | null>(null);
 
 /** The socket address a custom server vouches for (set from `getLoadContext`); null = nothing vouched. */
 export const camadaPeerContext = createContext<string | null>(null);
 
-// The engine that minted the vars: track() and scriptTag() are its methods, so the helpers need it too.
-export const camadaInstanceContext = createContext<FetchCamada | null>(null);
-
 /** Loaders, actions and middleware all receive the same read-only provider. */
 export type RouterContext = Readonly<RouterContextProvider>;
 
-const readSlot = (context: RouterContext): { cam: FetchCamada; vars: FetchVars } | undefined =>
-  guarded(() => {
-    const cam = context.get(camadaInstanceContext);
-    const vars = context.get(camadaContext);
-    return cam && vars ? { cam, vars } : undefined;
-  }, undefined);
+const readSlot = (context: RouterContext): FetchVars | undefined => guarded(() => context.get(camadaContext) ?? undefined, undefined);
 
 /**
  * Records an outcome the app knows and the wire cannot show: `login_failed`, `login_succeeded`,
@@ -35,13 +27,7 @@ const readSlot = (context: RouterContext): { cam: FetchCamada; vars: FetchVars }
  * through its rid and session; the user identifier is HMAC-hashed in-process. Never throws,
  * never rejects, and is a no-op where the middleware did not run.
  */
-export function track(context: RouterContext, event: string, data?: { user?: string }): Promise<void> {
-  const slot = readSlot(context);
-  return slot ? slot.cam.track(slot.vars, event, data) : Promise.resolve();
-}
+export const track = (context: RouterContext, event: string, data?: { user?: string }): Promise<void> => coreTrack(readSlot(context), event, data);
 
 /** The `<script>` tag for an HTML response — `''` when camada is off for this request or the tenant turned the beacon off. */
-export function scriptTag(context: RouterContext): string {
-  const slot = readSlot(context);
-  return slot ? slot.cam.scriptTag(slot.vars) : '';
-}
+export const scriptTag = (context: RouterContext): string => coreScriptTag(readSlot(context));
