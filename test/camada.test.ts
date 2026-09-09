@@ -57,7 +57,8 @@ function app(request: Request, context: RouterContextProvider): () => Promise<Re
     if (pathname === '/page') return html(`<html><head>${scriptTag(context)}</head><body>page</body></html>`);
     if (pathname === '/redirect') return Response.redirect('http://app.test/', 302);
     if (pathname === '/login' && request.method === 'POST') { await track(context, 'login_failed', { user: 'alice@example.com' }); return new Response('no', { status: 401 }); }
-    if (pathname === '/boom') throw new Error('boom');   // a resource route whose loader threw past the router
+    if (pathname === '/boom') throw new Error('boom');   // a downstream middleware threw: the router's error boundary answers 500
+    if (pathname === '/away') throw Response.redirect('http://app.test/', 302);   // a downstream middleware threw a redirect
     return new Response('not found', { status: 404 });
   };
 }
@@ -103,11 +104,22 @@ describe('capture', () => {
     expect(sdkHeaders.every((h) => h === '@camada/remix/0.1.0')).toBe(true);
   });
 
-  it('ships st null and rethrows when next() rejects — the router\'s error handler owns the status', async () => {
+  it('ships st 500 and rethrows when next() rejects with an error — the router\'s error boundary answers 500', async () => {
     const mw = await primed();
     await expect(call(mw, '/boom', { headers: { cookie: '_sfp=known-sid' } })).rejects.toThrow('boom');
     await settle();
-    expect(events).toEqual([expect.objectContaining({ p: '/boom', st: null, sid: 'known-sid', tap: 'sdk-remix' })]);
+    expect(events).toEqual([expect.objectContaining({ p: '/boom', st: 500, sid: 'known-sid', tap: 'sdk-remix' })]);
+  });
+
+  it('ships a thrown Response\'s own status and rethrows it with the session cookie', async () => {
+    const mw = await primed();
+    const thrown = await call(mw, '/away').then(() => null, (e: unknown) => e as Response);
+    expect(thrown).toBeInstanceOf(Response);
+    expect(thrown!.status).toBe(302);
+    expect(thrown!.headers.get('location')).toBe('http://app.test/');
+    expect(thrown!.headers.get('set-cookie')).toContain('_sfp=');
+    await settle();
+    expect(events).toEqual([expect.objectContaining({ p: '/away', st: 302, ns: 1 })]);
   });
 
   it('blocks a listed peer with 403 and the block headers before next() runs', async () => {
