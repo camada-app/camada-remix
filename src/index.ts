@@ -3,7 +3,6 @@
 //   route('/_cam/*', 'routes/cam.tsx')                 // routes.ts; the file re-exports camadaRoute()
 //   scriptTag(context)                                 // in a loader: the first-party beacon tag
 //   track(context, 'login_failed', { user })           // in an action: an outcome the wire cannot show
-export { camada, resetCamada, type CamadaRemixOptions } from './camada.js';
+export { camada, resetCamada, type CamadaRemixOptions, type CamadaRemixVars } from './camada.js';
 export { camadaRoute } from './route.js';
-export { track, scriptTag, camadaContext, camadaPeerContext } from './context.js';
-export type { FetchVars as CamadaVars } from '@camada/core/fetch';
+export { track, scriptTag, camadaPeerContext } from './context.js';

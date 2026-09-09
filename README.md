@@ -125,7 +125,7 @@ header value in `camadaPeerContext`: that is the one address camada takes on fai
 | `snapshotVersion` | `5` | `4` drops the custom rules, `3` the allow/challenge sides too |
 | `scriptPath` | `/_cam/b.js` | where the first-party beacon script is served |
 | `fpPath` | `/_cam/fp` | where that script posts the beacon; keep it in `scriptPath`'s directory |
-| `mode` | `'lazy'` | `'timer'` for a long-lived Node server; `CAMADA_SERVERLESS=1` forces lazy |
+| `mode` | `lazy` (or `timer`) | `timer` polls the snapshot on an unref'd interval (long-lived process); `lazy` refreshes it per request off-path. `CAMADA_SERVERLESS=1` forces `lazy` |
 | `env` | `process.env` | overrides the process env (tests, and apps that read config themselves) |
 
 `CAMADA_CHALLENGE=0` in the env switches the challenge off without a code change.
@@ -141,6 +141,7 @@ on parse (an element cannot be dangerously-set inside `<head>` next to `<Meta />
 
 ```tsx
 // app/root.tsx
+import { Meta, Links, Scripts, useRouteLoaderData } from 'react-router';
 import { camada, scriptTag } from '@camada/remix';
 import type { Route } from './+types/root';
 
