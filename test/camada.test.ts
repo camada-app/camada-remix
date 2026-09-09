@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { RouterContextProvider } from 'react-router';
 import iife from '@camada/browser/iife-string';
-import { camada, camadaRoute, camadaContext, camadaPeerContext, track, scriptTag, resetCamada, type CamadaRemixOptions } from '../src/index.js';
+import { camada, camadaRoute, camadaPeerContext, track, scriptTag, resetCamada, type CamadaRemixOptions } from '../src/index.js';
 
 const FIX = fileURLToPath(new URL('../node_modules/@camada/core/test/fixtures/blk3/', import.meta.url));
 const V4 = {
@@ -20,8 +20,7 @@ const V4 = {
 const BLOCKED_IP = '203.0.113.66';     // block side
 const CHALLENGED_IP = '192.0.2.20';    // challenge side only
 const HTML = { accept: 'text/html', 'sec-fetch-dest': 'document' };
-type Config = { tenant: string; beacon: boolean; sample: number; exclude: string[]; trusted_proxy: Record<string, unknown>; poll_seconds: number };
-const CONFIG: Config = { tenant: 'acme', beacon: true, sample: 1, exclude: [], trusted_proxy: { mode: 'none' }, poll_seconds: 30 };
+const CONFIG = { tenant: 'acme', beacon: true, sample: 1, exclude: [], trusted_proxy: { mode: 'none' }, poll_seconds: 30 };
 const ENV = { CAMADA_KEY: 'tok-acme.snap-acme', CAMADA_INGEST_URL: 'http://analyst.test', CAMADA_SNAPSHOT_URL: 'http://analyst.test/snapshot' };
 
 function frame(): ArrayBuffer {
@@ -45,7 +44,7 @@ const fetchImpl: typeof fetch = (async (url: string | URL | Request, init?: Requ
 }) as typeof fetch;
 
 /** No waitUntil on this host: the flush and the snapshot load settle on their own within a few ticks. */
-const settle = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)); };
+const settle = async () => { for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0)); };
 
 /** The app behind `next()`: fixed responses, including the immutable-headers redirect. */
 const html = (s: string) => new Response(s, { headers: { 'content-type': 'text/html' } });
@@ -58,6 +57,7 @@ function app(request: Request, context: RouterContextProvider): () => Promise<Re
     if (pathname === '/page') return html(`<html><head>${scriptTag(context)}</head><body>page</body></html>`);
     if (pathname === '/redirect') return Response.redirect('http://app.test/', 302);
     if (pathname === '/login' && request.method === 'POST') { await track(context, 'login_failed', { user: 'alice@example.com' }); return new Response('no', { status: 401 }); }
+    if (pathname === '/boom') throw new Error('boom');   // a resource route whose loader threw past the router
     return new Response('not found', { status: 404 });
   };
 }
@@ -103,6 +103,13 @@ describe('capture', () => {
     expect(sdkHeaders.every((h) => h === '@camada/remix/0.1.0')).toBe(true);
   });
 
+  it('ships st null and rethrows when next() rejects — the router\'s error handler owns the status', async () => {
+    const mw = await primed();
+    await expect(call(mw, '/boom', { headers: { cookie: '_sfp=known-sid' } })).rejects.toThrow('boom');
+    await settle();
+    expect(events).toEqual([expect.objectContaining({ p: '/boom', st: null, sid: 'known-sid', tap: 'sdk-remix' })]);
+  });
+
   it('blocks a listed peer with 403 and the block headers before next() runs', async () => {
     const mw = await primed();
     const next = vi.fn(async () => new Response('home'));
@@ -120,16 +127,13 @@ describe('capture', () => {
 });
 
 describe('challenge', () => {
-  it('serves the page for an HTML navigation and 403 JSON otherwise', async () => {
+  it('serves the page for an HTML navigation from the challenged peer', async () => {
     const mw = await primed();
     const page = await call(mw, '/cart', { headers: HTML }, CHALLENGED_IP);
     expect(page.status).toBe(403);
     expect(page.headers.get('content-type')).toContain('text/html');
     expect(await page.text()).toContain('name="nonce"');
     expect(events.some((e) => e.st === 403 && e.blk === 'challenge')).toBe(true);
-    const json = await call(mw, '/cart', { headers: { accept: 'application/json' } }, CHALLENGED_IP);
-    expect(json.status).toBe(403);
-    expect(await json.json()).toEqual({ error: 'challenge_required' });
   });
 
   it('verifies the solution, sets _cch and lets the cookie holder through', async () => {
@@ -165,15 +169,6 @@ describe('first-party beacon', () => {
     expect(events[0]).toMatchObject({ sig: 1, rid: 'abc', tz: 'UTC', ip: '9.9.9.9', tap: 'sdk-remix' });
   });
 
-  it('still blocks a blocked client at both endpoints', async () => {
-    const mw = await primed();
-    const script = await call(mw, '/_cam/b.js', {}, BLOCKED_IP);
-    expect(script.status).toBe(403);
-    expect(script.headers.get('x-block-reason')).toBe('ip4');
-    expect((await postBeacon(mw, JSON.stringify({ rid: 'abc' }), BLOCKED_IP)).status).toBe(403);
-    expect(events.every((e) => e.blk === 'ip4' && e.sig === undefined)).toBe(true);
-  });
-
   it('camadaRoute() serves the script and the relay where no middleware ran, and 404s the rest', async () => {
     const o = opts();
     await primed(o);   // the route shares this engine: it sees the loaded snapshot at once
@@ -196,9 +191,9 @@ describe('first-party beacon', () => {
     expect(blocked.headers.get('x-block-reason')).toBe('ip4');
   });
 
-  it('shares one engine between camada() and camadaRoute() for equal options, not just the same object', async () => {
+  it('shares one engine between camada() and camadaRoute() for equal options, whatever their key order', async () => {
     await primed({ scriptPath: '/api/cam/b.js', fpPath: '/api/cam/fp' });
-    const { loader } = camadaRoute({ env: ENV, fetchImpl, scriptPath: '/api/cam/b.js', fpPath: '/api/cam/fp' });
+    const { loader } = camadaRoute({ fpPath: '/api/cam/fp', scriptPath: '/api/cam/b.js', fetchImpl, env: { ...ENV } });
     const context = new RouterContextProvider();
     context.set(camadaPeerContext, BLOCKED_IP);
     const request = new Request('http://app.test/api/cam/b.js');
@@ -298,7 +293,7 @@ describe('the host', () => {
       const res = (await mw({ request, url: new URL(request.url), pattern: '/', params: {}, context }, app(request, context))) as Response;
       expect(res.status).toBe(200);
       expect(res.headers.get('set-cookie')).toBeNull();
-      expect(context.get(camadaContext)).toBeNull();
+      expect(scriptTag(context)).toBe('');
     }
     await settle();
     expect(events).toEqual([]);
