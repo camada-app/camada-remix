@@ -74,7 +74,6 @@ export function camada(opts: CamadaRemixOptions = {}): MiddlewareFunction<Respon
       cam.after(request, r.vars, 500);
       throw err;
     }
-    cam.after(request, r.vars, res.status);
-    return r.vars.sessionCookie ? withSetCookie(res, r.vars.sessionCookie) : res;
+    return cam.finish(request, r.vars, r.vars.sessionCookie ? withSetCookie(res, r.vars.sessionCookie) : res);   // ships once the body has gone out
   };
 }
