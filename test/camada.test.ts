@@ -101,7 +101,7 @@ describe('capture', () => {
     expect(events.find((e) => e.p === '/')).toMatchObject({ tap: 'sdk-remix', st: 200, ip: '8.8.8.8' });
     expect(events.find((e) => e.p === '/nope')).toMatchObject({ st: 404 });
     expect(sdkHeaders.length).toBeGreaterThan(0);
-    expect(sdkHeaders.every((h) => h === '@camada/remix/0.1.0')).toBe(true);
+    expect(sdkHeaders.every((h) => h === '@camada/remix/0.1.1')).toBe(true);
   });
 
   it('ships st 500 and rethrows when next() rejects with an error — the router\'s error boundary answers 500', async () => {
