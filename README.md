@@ -6,7 +6,9 @@ challenge), serves a first-party proof-of-work challenge page and beacon, and re
 outcomes your actions know (`track()`). Fails open by design — a camada outage or bug never
 5xxes your app.
 
-Not yet on npm — consumed via a `file:` dependency from a sibling checkout.
+```sh
+npm install @camada/remix
+```
 
 ## Quickstart
 
