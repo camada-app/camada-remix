@@ -69,8 +69,9 @@ async function call(mw: ReturnType<typeof camada>, path: string, init: RequestIn
   const context = new RouterContextProvider();
   if (peer) context.set(camadaPeerContext, peer);
   const res = (await mw({ request, url: new URL(request.url), pattern: '/', params: {}, context }, app(request, context))) as Response;
+  const body = res?.body ? await res.arrayBuffer() : null;   // send the body as the host would: the event ships once it has gone out
   await settle();
-  return res;
+  return new Response(body, res);
 }
 
 const opts = (extra: CamadaRemixOptions = {}): CamadaRemixOptions => ({ env: ENV, fetchImpl, ...extra });
@@ -101,7 +102,7 @@ describe('capture', () => {
     expect(events.find((e) => e.p === '/')).toMatchObject({ tap: 'sdk-remix', st: 200, ip: '8.8.8.8' });
     expect(events.find((e) => e.p === '/nope')).toMatchObject({ st: 404 });
     expect(sdkHeaders.length).toBeGreaterThan(0);
-    expect(sdkHeaders.every((h) => h === '@camada/remix/0.1.1')).toBe(true);
+    expect(sdkHeaders.every((h) => h === '@camada/remix/0.1.2')).toBe(true);
   });
 
   it('ships st 500 and rethrows when next() rejects with an error — the router\'s error boundary answers 500', async () => {
