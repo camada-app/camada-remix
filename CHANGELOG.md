@@ -9,3 +9,8 @@ Needs `@camada/core` 0.5.0.
 - `ts` is the request start, so `[ts, ts + dur]` is when the request ran.
 - `dur` for a `text/event-stream` response runs to its last byte, or until the client leaves.
   Any other response goes out untouched and ships at once, with `dur` = time to first byte.
+
+### Fixed
+
+- Path rules match the canonical path (through `@camada/core` 0.5.0). A percent-encoded,
+  upper-cased or trailing-slash spelling of a blocked path used to slip past the block.
