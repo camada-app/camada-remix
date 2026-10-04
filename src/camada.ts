@@ -7,7 +7,7 @@
 // never the app's response.
 import iife from '@camada/browser/iife-string';
 import { guarded, TAP_REMIX } from '@camada/core';
-import { createFetchCamada, withSetCookie, type FetchCamada, type FetchCamadaOptions, type FetchRequestContext, type FetchVars } from '@camada/core/fetch';
+import { createFetchCamada, withSetCookie, withRid, type FetchCamada, type FetchCamadaOptions, type FetchRequestContext, type FetchVars } from '@camada/core/fetch';
 import type { MiddlewareFunction } from 'react-router';
 import { camadaContext, camadaPeerContext, type RouterContext } from './context.js';
 import { SDK_ID } from './version.js';
@@ -69,7 +69,7 @@ export function camada(opts: CamadaRemixOptions = {}): MiddlewareFunction<Respon
       // the status and the cookie; anything else lands in the router's error boundary as a 500.
       if (err instanceof Response) {
         cam.after(request, r.vars, err.status);
-        throw r.vars.sessionCookie ? withSetCookie(err, r.vars.sessionCookie) : err;
+        throw withRid(r.vars.sessionCookie ? withSetCookie(err, r.vars.sessionCookie) : err, r.vars);
       }
       cam.after(request, r.vars, 500);
       throw err;
