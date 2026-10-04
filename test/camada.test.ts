@@ -95,6 +95,18 @@ beforeEach(() => { events = []; sdkHeaders = []; });
 afterEach(() => { resetCamada(); vi.unstubAllEnvs(); });
 
 describe('capture', () => {
+  it('sets x-rid to the event rid on answered responses (an immutable redirect included) and not on a block', async () => {
+    const a = await primed();
+    for (const path of ['/cart', '/redirect']) {
+      const res = await call(a, path);
+      expect(res.headers.get('x-rid'), path).toBe(events.find((e) => e.p === path)!.rid);
+    }
+    expect((await call(a, '/redirect')).headers.get('location')).toBe('http://app.test/');
+    const blocked = await call(a, '/', {}, BLOCKED_IP);
+    expect(blocked.status).toBe(403);
+    expect(blocked.headers.has('x-rid')).toBe(false);
+  });
+
   it('ships the event with the real status, the remix tap and the sdk header', async () => {
     const mw = await primed();
     expect((await call(mw, '/')).status).toBe(200);
@@ -119,6 +131,7 @@ describe('capture', () => {
     expect(thrown!.status).toBe(302);
     expect(thrown!.headers.get('location')).toBe('http://app.test/');
     expect(thrown!.headers.get('set-cookie')).toContain('_sfp=');
+    expect(thrown!.headers.get('x-rid')).toBe(events.at(-1)!.rid);
     await settle();
     expect(events).toEqual([expect.objectContaining({ p: '/away', st: 302, ns: 1 })]);
   });
