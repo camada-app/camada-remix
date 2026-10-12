@@ -1,0 +1,69 @@
+// camada-all-zhoc: with the README's route table, React Router runs middleware only for matched
+// routes, so the challenge form must post somewhere a route matches. The default challengePath
+// sits under the beacon route's directory (`/_cam/challenge`), which camadaRoute() answers.
+// Driven through React Router's real createRequestHandler, not the middleware directly.
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { resetCamada } from '../src/index.js';
+import { readmeApp, CHALLENGED_PATH, HTML } from './rr-harness.js';
+
+afterEach(() => { resetCamada(); vi.restoreAllMocks(); });
+
+const nonceOf = (page: string) => /name="nonce" value="([0-9a-f]{32})"/.exec(page)![1];
+const actionOf = (page: string) => /<form[^>]*action="([^"]+)"/.exec(page)![1];
+const solve = (nonce: string): string => {
+  for (let n = 0; ; n++) if (createHash('sha256').update(`${nonce}.${n}`).digest('hex').startsWith('0000')) return String(n);
+};
+const FORM = { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://app.test' };
+const quiet = () => vi.spyOn(console, 'error').mockImplementation(() => {});   // React Router logs "No route matches" for a 404
+
+describe('challenge verify through React Router routing (camada-all-zhoc)', () => {
+  it('the page posts to /_cam/challenge, under the README beacon route', async () => {
+    const h = await readmeApp();
+    const page = await h(new Request(`http://app.test${CHALLENGED_PATH}`, { headers: HTML }));
+    expect(page.status).toBe(403);
+    expect(actionOf(await page.text())).toBe('/_cam/challenge');
+  });
+
+  it('a wrong solution reaches camada: 403 page re-issued, not the app 404', async () => {
+    const h = await readmeApp();
+    const res = await h(new Request('http://app.test/_cam/challenge', { method: 'POST', headers: FORM, body: 'nonce=x&solution=y&to=%2F' }));
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain('name="nonce"');
+  });
+
+  it('a solved challenge 302s with _cch and the next request passes', async () => {
+    const h = await readmeApp();
+    const page = await (await h(new Request(`http://app.test${CHALLENGED_PATH}`, { headers: HTML }))).text();
+    const nonce = nonceOf(page);
+    const body = `nonce=${nonce}&solution=${solve(nonce)}&to=${encodeURIComponent(CHALLENGED_PATH)}`;
+    const ok = await h(new Request(`http://app.test${actionOf(page)}`, { method: 'POST', headers: FORM, body }));
+    expect(ok.status).toBe(302);
+    expect(ok.headers.get('location')).toBe(CHALLENGED_PATH);
+    const cookie = ok.headers.get('set-cookie')!.split(';')[0];
+    expect(cookie).toMatch(/^_cch=/);
+    const after = await h(new Request(`http://app.test${CHALLENGED_PATH}`, { headers: { ...HTML, cookie } }));
+    expect(after.status).toBe(200);
+  });
+
+  it('the old default /__camada/challenge has no route: React Router 404s it before camada runs', async () => {
+    quiet();
+    const h = await readmeApp();
+    const res = await h(new Request('http://app.test/__camada/challenge', { method: 'POST', headers: FORM, body: 'nonce=x&solution=y&to=%2F' }));
+    expect(res.status).toBe(404);
+  });
+
+  it('a custom scriptPath moves the default challenge path into its directory', async () => {
+    const h = await readmeApp({ scriptPath: '/api/cam/b.js', fpPath: '/api/cam/fp' });
+    const page = await (await h(new Request(`http://app.test${CHALLENGED_PATH}`, { headers: HTML }))).text();
+    expect(actionOf(page)).toBe('/api/cam/challenge');
+    const res = await h(new Request('http://app.test/api/cam/challenge', { method: 'POST', headers: FORM, body: 'nonce=x&solution=y&to=%2F' }));
+    expect(res.status).toBe(403);
+  });
+
+  it('an explicit challengePath is kept', async () => {
+    const h = await readmeApp({ challengePath: '/_cam/verify' });
+    const page = await (await h(new Request(`http://app.test${CHALLENGED_PATH}`, { headers: HTML }))).text();
+    expect(actionOf(page)).toBe('/_cam/verify');
+  });
+});

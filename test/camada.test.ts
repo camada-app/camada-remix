@@ -165,7 +165,7 @@ describe('challenge', () => {
   it('verifies the solution, sets _cch and lets the cookie holder through', async () => {
     const mw = await primed();
     const nonce = nonceOf(await (await call(mw, '/cart', { headers: HTML }, CHALLENGED_IP)).text());
-    const ok = await call(mw, '/__camada/challenge', {
+    const ok = await call(mw, '/_cam/challenge', {
       method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `nonce=${nonce}&solution=${solve(nonce)}&to=%2Fcart`,
     }, CHALLENGED_IP);
     expect(ok.status).toBe(302);
