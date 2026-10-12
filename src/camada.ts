@@ -45,11 +45,11 @@ export function instanceFor(given: CamadaRemixOptions = {}): FetchCamada {
   // browser requests and core compares) carry it: the defaults live under it (camada-all-xms0).
   const base = (basename ?? '').replace(/\/+$/, '');
   const scriptPath = core.scriptPath ?? (base ? `${base}/_cam/b.js` : undefined);
-  const fpPath = core.fpPath ?? (base && !core.scriptPath ? `${base}/_cam/fp` : undefined);
+  const fpPath = core.fpPath ?? inScriptDir(scriptPath, 'fp');   // the script posts next to itself (auto.ts derives it): `/_cam/fp` by default
   const opts = {
     ...core,
     ...(scriptPath ? { scriptPath } : {}),
-    ...(fpPath ? { fpPath } : {}),
+    fpPath,
     challengePath: core.challengePath ?? inScriptDir(scriptPath, 'challenge'),
   };
   const { fetchImpl, ...serialisable } = opts;

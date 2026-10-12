@@ -110,4 +110,11 @@ describe('basename moves the default endpoints under it (camada-all-xms0)', () =
     const g = await readmeApp({ basename: base, challengePath: '/app/_cam/verify' });
     expect(actionOf(await (await g(new Request(`http://app.test${FULL}`, { headers: HTML }), IP)).text())).toBe('/app/_cam/verify');
   });
+
+  it('basename + an explicit scriptPath, no fpPath: the relay sits next to the script, where the browser posts (RF-3)', async () => {
+    const h = await readmeApp({ basename: base, scriptPath: '/app/x/b.js' }, 'x/*');   // route /x/* under basename /app
+    expect((await h(new Request('http://app.test/app/x/b.js'))).status).toBe(200);
+    const res = await h(new Request('http://app.test/app/x/fp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rid: 'r1' }) }));
+    expect(res.status).toBe(204);
+  });
 });

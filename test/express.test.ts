@@ -4,6 +4,7 @@
 // Passing `res` through `camadaResponseContext` lets camada clear what its answer replaces (R7-2).
 import { describe, it, expect, afterEach } from 'vitest';
 import { request as httpRequest, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import express from 'express';
 import helmet from 'helmet';
 import { createRequestHandler } from '@react-router/express';
@@ -11,7 +12,7 @@ import { RouterContextProvider } from 'react-router';
 import { camadaPeerContext, camadaResponseContext, resetCamada } from '../src/index.js';
 import { readmeBuild, CHALLENGED_PATH, HTML } from './rr-harness.js';
 
-const PORT = 8835;
+let port = 0;   // listen(0): the OS picks a free port, read back after listen
 let server: Server | null = null;
 afterEach(async () => { await new Promise((r) => (server ? server.close(r) : r(null))); server = null; resetCamada(); });
 
@@ -27,13 +28,14 @@ async function start(passRes: boolean): Promise<void> {
       return context;
     },
   }));
-  await new Promise<void>((r) => { server = app.listen(PORT, '127.0.0.1', () => r()); });
+  await new Promise<void>((r) => { server = app.listen(0, '127.0.0.1', () => r()); });
+  port = (server!.address() as AddressInfo).port;
 }
 
 /** Raw header lines, so two CSP headers are not folded into one as fetch's Headers would. */
 const get = (path: string, headers: Record<string, string> = {}): Promise<{ status: number; raw: string[]; body: string }> =>
   new Promise((resolve, reject) => {
-    const req = httpRequest({ host: '127.0.0.1', port: PORT, path, headers, agent: false }, (res) => {
+    const req = httpRequest({ host: '127.0.0.1', port, path, headers, agent: false }, (res) => {
       let body = '';
       res.setEncoding('utf8').on('data', (d) => (body += d)).on('end', () => resolve({ status: res.statusCode!, raw: res.rawHeaders, body }));
     });

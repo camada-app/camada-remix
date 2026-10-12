@@ -153,7 +153,7 @@ the edge.
 | `challengePath` | `/_cam/challenge` (next to `scriptPath`; under `basename` if set) | where that page posts its solution; keep it under the route that calls `camadaRoute()` |
 | `snapshotVersion` | `5` | `4` drops the custom rules, `3` the allow/challenge sides too |
 | `scriptPath` | `/_cam/b.js` (`<basename>/_cam/b.js` if `basename` is set) | where the first-party beacon script is served |
-| `fpPath` | `/_cam/fp` (`<basename>/_cam/fp` if `basename` is set) | where that script posts the beacon; keep it in `scriptPath`'s directory |
+| `fpPath` | `fp` in `scriptPath`'s directory: `/_cam/fp`, `<basename>/_cam/fp` if `basename` is set, `/app/x/fp` for `scriptPath: '/app/x/b.js'` | where that script posts the beacon; the script derives it from its own `src`, so keep it in `scriptPath`'s directory |
 | `mode` | `lazy` (or `timer`) | `timer` polls the snapshot on an unref'd interval (long-lived process); `lazy` refreshes it per request off-path. `CAMADA_SERVERLESS=1` forces `lazy` |
 | `basename` | none | your React Router `basename` (react-router.config.ts). Set it when the app has one (on `camada()` and `camadaRoute()` alike): the default `scriptPath`, `fpPath` and `challengePath` then live under it (`/app/_cam/b.js`, `/app/_cam/fp`, `/app/_cam/challenge`), and the client's redirect for a challenged navigation no longer lands on `/app/app/page`. An explicit path is used as given |
 | `env` | `process.env` | overrides the process env (tests, and apps that read config themselves) |
@@ -223,8 +223,8 @@ the basename, the router 404s the challenge form, and no challenged visitor can 
 With the root middleware mounted it answers first, and the route's loader and action are the
 fallback (a middleware mounted lower, or none at all). They re-run the verdict, so a blocked
 client gets a 403 there as well. A custom `scriptPath` / `fpPath` must share a directory (the
-script derives the post path from its own `src`), the challenge path defaults to that same
-directory (`/api/cam/b.js` → `/api/cam/challenge`), and the route must cover it. An explicit
+script derives the post path from its own `src`), `fpPath` and the challenge path default to that same
+directory (`/api/cam/b.js` → `/api/cam/fp`, `/api/cam/challenge`), and the route must cover it. An explicit
 `challengePath` outside that route 404s in the router, and no challenged visitor can pass.
 
 What is **not** captured: requests to URLs no route matches (scanner probes such as

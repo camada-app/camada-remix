@@ -3,6 +3,9 @@
 # `// app/routes/cam.tsx` block, so the two cannot drift) with `react-router build` (camada-all-xms0:
 # `export const { loader, action } = camadaRoute()` fails that build). Needs network (npm install)
 # and `npm run build` done first. Usage: scripts/readme-build-check.sh [workdir]
+# The app is build-only: it is never served, so the README's route module calling camadaRoute()
+# without the `basename` that root.tsx passes to camada() is not exercised (a served app must pass
+# the same options to both, as the README says). The routing itself is tested in test/routing.test.ts.
 set -euo pipefail
 PKG="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${1:-$(mktemp -d)}"
