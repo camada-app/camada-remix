@@ -7,6 +7,11 @@ the challenge verify, camada-all-4u4i).
 
 ### Fixed
 
+- A custom Express server can pass its `res` in the new `camadaResponseContext` (from
+  `getLoadContext(req, res)`). Before camada answers a request itself it removes from `res` the
+  headers its answer sets, because `@react-router/express` appends: with helmet in front, the
+  challenge page went out with helmet's Content-Security-Policy next to its own, and the stricter
+  one blocked the solver. The README shows the server and the alternatives. (camada-all-mwpo)
 - The challenge form posts to `/_cam/challenge` by default (next to a custom `scriptPath`),
   under the README's `/_cam/*` route. The old default `/__camada/challenge` had no route, so
   React Router 404'd the POST before camada ran and a challenged visitor could never pass

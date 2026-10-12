@@ -9,7 +9,7 @@ import iife from '@camada/browser/iife-string';
 import { guarded, safeReturnTo, TAP_REMIX } from '@camada/core';
 import { createFetchCamada, withSetCookie, withRid, type FetchCamada, type FetchCamadaOptions, type FetchRequestContext, type FetchVars } from '@camada/core/fetch';
 import type { MiddlewareFunction } from 'react-router';
-import { camadaContext, camadaPeerContext, type RouterContext } from './context.js';
+import { camadaContext, camadaPeerContext, camadaResponseContext, type RouterContext } from './context.js';
 import { SDK_ID } from './version.js';
 
 export interface CamadaRemixOptions extends FetchCamadaOptions {
@@ -111,6 +111,21 @@ export function forNavigation(req: Request, res: Response, basename?: string): R
   }, res);
 }
 
+/** camada's own answer (block, challenge, verify, beacon), in the form the router sends. Where a custom
+ *  server passed its Node response in `camadaResponseContext`, the headers that answer sets are
+ *  removed from it first: the Express adapter appends, so an upstream policy or cache header
+ *  would otherwise go out next to the answer's own (R7-2). Set-Cookie is the app's and stays. */
+export function answered(req: Request, context: RouterContext, res: Response, basename?: string): Response {
+  const out = forNavigation(req, res, basename);
+  guarded(() => {
+    const node = context.get(camadaResponseContext);
+    if (!node || typeof node.removeHeader !== 'function') return;
+    for (const k of out.headers.keys()) if (k !== 'set-cookie') node.removeHeader(k);
+    if (out.headers.has('content-security-policy')) node.removeHeader('content-security-policy-report-only');
+  }, undefined);
+  return out;
+}
+
 /** The same-origin Referer's path and query (without the basename), when it is a safe return target. */
 function fromReferer(req: Request, origin: string, basename: string | undefined): string | null {
   const raw = req.headers.get('referer');
@@ -129,7 +144,7 @@ export function camada(opts: CamadaRemixOptions = {}): MiddlewareFunction<Respon
   return async ({ request, context }, next) => {
     const r = await cam.before(request, requestContext(context));
     if (!r) return next();
-    if (r.response) return forNavigation(request, r.response, opts.basename);   // block, challenge, verify, beacon: answered without the app
+    if (r.response) return answered(request, context, r.response, opts.basename);   // block, challenge, verify, beacon: answered without the app
     guarded(() => context.set(camadaContext, r.vars), undefined);
     let res: Response;
     try {

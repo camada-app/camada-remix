@@ -103,17 +103,29 @@ this tap vouches for no address. A custom server knows the socket and can say so
 // server.ts (Express)
 import { createRequestHandler } from '@react-router/express';
 import { RouterContextProvider } from 'react-router';
-import { camadaPeerContext } from '@camada/remix';
+import { camadaPeerContext, camadaResponseContext } from '@camada/remix';
 
 app.all('*', createRequestHandler({
   build,
-  getLoadContext(req) {
+  getLoadContext(req, res) {
     const context = new RouterContextProvider();
     context.set(camadaPeerContext, req.socket.remoteAddress ?? null);   // the address Node vouches for, never a header
+    context.set(camadaResponseContext, res);   // lets camada's answers replace headers set before the handler (below)
     return context;
   },
 }));
 ```
+
+`@react-router/express` copies a Response's headers onto `res` with `res.append`, so a header an
+Express middleware set before the handler goes out next to camada's own. With
+[helmet](https://helmetjs.github.io/) in front, the challenge page would carry two
+`Content-Security-Policy` headers: browsers enforce both, and helmet's blocks the page's inline
+solver, so a challenged visitor can never pass. Handing camada `res` through
+`camadaResponseContext` (as above) fixes that: before it answers a request itself (block,
+challenge, verify, beacon script), camada removes from `res` every header its answer sets, plus a
+report-only policy under the challenge page's own. Set-Cookie headers are left alone. Without it,
+mount helmet after the React Router handler, or set your policy from React Router's
+`entry.server` / route `headers` instead of Express.
 
 Behind a load balancer, set `CAMADA_TRUSTED_PROXY=hops:1` (or `cidrs:…`) — or the
 `trustedProxy` option — and `X-Forwarded-For` is read one hop behind that peer. Never put a
