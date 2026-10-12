@@ -7,6 +7,10 @@ the challenge verify, camada-all-4u4i).
 
 ### Fixed
 
+- With a `basename` and an explicit `scriptPath` but no `fpPath`, the beacon relay now sits next to
+  the script (`/app/x/b.js` → `/app/x/fp`), where the browser script posts. Before, it fell back to
+  `/_cam/fp` and every beacon 404'd. `fpPath` now always defaults to `scriptPath`'s directory
+  (`/_cam/fp` when neither is set). (camada-all-xms0)
 - With a `basename`, the default `scriptPath`, `fpPath` and `challengePath` live under it
   (`/app/_cam/b.js`, `/app/_cam/fp`, `/app/_cam/challenge`), in `camada()` and `camadaRoute()`
   alike. Before, they sat outside the basename, so the challenge form posted to a URL React Router

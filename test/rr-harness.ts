@@ -26,9 +26,10 @@ const fetchImpl = (async (url: string | URL | Request) => {
 
 export type Handler = (req: Request, peer?: string) => Promise<Response>;
 
-/** The README's app, with `extra` camada options on both the middleware and the route. */
-export async function readmeApp(extra: CamadaRemixOptions = {}): Promise<Handler> {
-  const handler = createRequestHandler(readmeBuild(extra), 'production');
+/** The README's app, with `extra` camada options on both the middleware and the route. `camDir` is the
+ *  beacon route's router path (after the basename is stripped); default: `scriptPath`'s directory. */
+export async function readmeApp(extra: CamadaRemixOptions = {}, camDir?: string): Promise<Handler> {
+  const handler = createRequestHandler(readmeBuild(extra, camDir), 'production');
   const h: Handler = async (req, peer = '8.8.8.8') => {
     const c = new RouterContextProvider();
     c.set(camadaPeerContext, peer);
@@ -40,10 +41,9 @@ export async function readmeApp(extra: CamadaRemixOptions = {}): Promise<Handler
 }
 
 /** The README's ServerBuild, for a host that brings its own request handler (an Express server). */
-export function readmeBuild(extra: CamadaRemixOptions = {}): ServerBuild {
+export function readmeBuild(extra: CamadaRemixOptions = {}, camDir = inScriptDir(extra.scriptPath, '*')): ServerBuild {
   const opts: CamadaRemixOptions = { env: { CAMADA_KEY: 'tok-acme.snap-acme', CAMADA_INGEST_URL: 'http://analyst.test', CAMADA_SNAPSHOT_URL: 'http://analyst.test/snapshot' }, fetchImpl, ...extra };
   const cam = camadaRoute(opts);
-  const camDir = inScriptDir(extra.scriptPath, '*');
   const build = {
     entry: { module: { default: (_req: Request, status: number, headers: Headers) => new Response(`app document, status ${status}`, { status, headers }) } },
     routes: {
