@@ -4,7 +4,7 @@
 // @camada/next has camadaRoute(). before() re-runs the verdict, so a blocked client gets its
 // 403 here too, and with the root middleware mounted it answers first and this never runs.
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
-import { instanceFor, requestContext, type CamadaRemixOptions } from './camada.js';
+import { instanceFor, requestContext, forNavigation, type CamadaRemixOptions } from './camada.js';
 
 type Handler<A> = (args: A) => Promise<Response>;
 
@@ -12,7 +12,7 @@ export function camadaRoute(opts: CamadaRemixOptions = {}): { loader: Handler<Lo
   const cam = instanceFor(opts);
   const answer: Handler<LoaderFunctionArgs | ActionFunctionArgs> = async ({ request, context }) => {
     const r = await cam.before(request, requestContext(context));
-    return r?.response ?? new Response(null, { status: 404 });   // not a beacon path, or camada inert: nothing to serve
+    return r?.response ? forNavigation(request, r.response) : new Response(null, { status: 404 });   // not a beacon path, or camada inert: nothing to serve
   };
   return { loader: answer, action: answer };
 }
