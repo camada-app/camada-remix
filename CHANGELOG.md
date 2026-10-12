@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+Needs the `@camada/core` that exports `readBodyCapped` (the streamed body cap on `/_cam/fp` and
+the challenge verify, camada-all-4u4i).
+
+### Fixed
+
+- The challenge form posts to `/_cam/challenge` by default (next to a custom `scriptPath`),
+  under the README's `/_cam/*` route. The old default `/__camada/challenge` had no route, so
+  React Router 404'd the POST before camada ran and a challenged visitor could never pass
+  (camada-all-zhoc). An explicit `challengePath` is kept as given.
+- A client-side navigation to a challenged route (`<path>.data`) gets React Router's
+  reload-document redirect to the same page instead of a `403` JSON that the route's error
+  boundary rendered. The document request then shows the challenge. API and `fetch()` calls
+  still get the `403` JSON (camada-all-wjln).
+
+### Docs
+
+- README: the routes camada needs and why, what an unmatched URL means for capture, and the
+  no-peer `X-Forwarded-For` walk (trusts the host's edge).
+
 ## 0.1.3 (2026-10-09; follows 0.1.2)
 
 Needs `@camada/core` 0.5.1.

@@ -25,7 +25,7 @@ import { type RouteConfig, index, route } from '@react-router/dev/routes';
 
 export default [
   index('routes/home.tsx'),
-  route('/_cam/*', 'routes/cam.tsx'),   // the beacon endpoints only run where a route exists
+  route('/_cam/*', 'routes/cam.tsx'),   // camada's own endpoints (beacon + challenge) only run where a route exists
 ] satisfies RouteConfig;
 ```
 
@@ -80,8 +80,12 @@ fill one event queue. Two mounts with different keys or URLs each get their own.
    counts SDK blocks apart from your own 403s.
 5. **Skip** → a skip rule or the allow list wins over a wider block.
 6. **Challenge** → a `403` proof-of-work page for HTML navigations, `403
-   {"error":"challenge_required"}` for anything else; `POST /__camada/challenge` verifies the
-   work, sets `_cch` and 302s back.
+   {"error":"challenge_required"}` for API and `fetch()` calls; `POST /_cam/challenge` verifies
+   the work, sets `_cch` and 302s back. A client-side navigation (React Router fetching
+   `<path>.data` for a `<Link>`) is answered in React Router's own redirect form instead
+   (`204` + `X-Remix-Redirect` to the same page + `X-Remix-Reload-Document`), so the browser
+   reloads the page as a document and meets the challenge, rather than your error boundary
+   rendering a 403.
 7. Otherwise `next()` runs your loaders and actions, and the settled response ships one
    batched, redacted event with its real status (Authorization and Cookie values never leave
    the process; credential-looking query values are scrubbed — see `@camada/core`). A first
@@ -114,6 +118,14 @@ Behind a load balancer, set `CAMADA_TRUSTED_PROXY=hops:1` (or `cidrs:…`) — o
 `trustedProxy` option — and `X-Forwarded-For` is read one hop behind that peer. Never put a
 header value in `camadaPeerContext`: that is the one address camada takes on faith.
 
+Without a vouched peer (no `camadaPeerContext`, e.g. on a serverless host), this adapter keeps
+the plain `X-Forwarded-For` walk under your trusted-proxy config. With a peer, a `cidrs`
+config is walked only when the peer itself is a trusted proxy or loopback. Without one there is
+nothing to check, so the walk trusts that every request came through your edge (the platform,
+load balancer or CDN in front of the app). That holds when the edge is the only way in. If the
+origin is reachable directly, a client can send its own `X-Forwarded-For`, so lock the origin to
+the edge.
+
 ## Options
 
 | option | default | meaning |
@@ -123,7 +135,7 @@ header value in `camadaPeerContext`: that is the one address camada takes on fai
 | `snapshotUrl` | `<ingestUrl>/snapshot` | snapshot endpoint |
 | `trustedProxy` | server config | `none` / `vercel` / `hops:N` / `cidrs:a,b`, or the parsed object |
 | `challenge` | `true` | serve the proof-of-work page for `challenge` verdicts |
-| `challengePath` | `/__camada/challenge` | where that page posts its solution |
+| `challengePath` | `/_cam/challenge` (next to `scriptPath`) | where that page posts its solution; keep it under the route that calls `camadaRoute()` |
 | `snapshotVersion` | `5` | `4` drops the custom rules, `3` the allow/challenge sides too |
 | `scriptPath` | `/_cam/b.js` | where the first-party beacon script is served |
 | `fpPath` | `/_cam/fp` | where that script posts the beacon; keep it in `scriptPath`'s directory |
@@ -173,12 +185,31 @@ never the one the body claims. Both endpoints sit behind the verdict: a blocked 
 there too. The tag is `''` when camada is off for the request or the project turned the beacon
 off in its settings, and the endpoints stand down with it.
 
-React Router runs middleware only for matched routes, so `/_cam/*` needs a route to exist:
-that is what `route('/_cam/*', 'routes/cam.tsx')` and `camadaRoute()` are for. With the root
-middleware mounted it answers first and the route's loader and action are the fallback (a
-middleware mounted lower, or none at all); they re-run the verdict, so a blocked client is
-403'd there as well. A custom `scriptPath` / `fpPath` must share a directory (the script derives
-the post path from its own `src`) and the route must cover it.
+## The routes camada needs
+
+React Router runs middleware only for a URL some route matches. An unmatched URL gets the
+router's 404 before any middleware runs, so camada never sees it. Its own endpoints therefore
+need a route, and `route('/_cam/*', 'routes/cam.tsx')` with `camadaRoute()` is that route. It
+covers three endpoints:
+
+| endpoint | what it is |
+|---|---|
+| `GET /_cam/b.js` | the beacon script |
+| `POST /_cam/fp` | the beacon relay |
+| `POST /_cam/challenge` | the challenge page's form: verifies the work and sets `_cch` |
+
+With the root middleware mounted it answers first, and the route's loader and action are the
+fallback (a middleware mounted lower, or none at all). They re-run the verdict, so a blocked
+client gets a 403 there as well. A custom `scriptPath` / `fpPath` must share a directory (the
+script derives the post path from its own `src`), the challenge path defaults to that same
+directory (`/api/cam/b.js` → `/api/cam/challenge`), and the route must cover it. An explicit
+`challengePath` outside that route 404s in the router, and no challenged visitor can pass.
+
+What is **not** captured: requests to URLs no route matches (scanner probes such as
+`/wp-admin/setup.php` or `/.env`). They never reach the middleware, so they ship no event and a
+path block on them is not counted. Your app's 404 still answers them. To capture them as well,
+add a splat route (`route('*', 'routes/not-found.tsx')`) whose loader throws your 404: the
+middleware then runs for every URL.
 
 ## App-context events
 
