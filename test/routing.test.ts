@@ -67,3 +67,47 @@ describe('challenge verify through React Router routing (camada-all-zhoc)', () =
     expect(actionOf(page)).toBe('/_cam/verify');
   });
 });
+
+describe('basename moves the default endpoints under it (camada-all-xms0)', () => {
+  const base = '/app';
+  const FULL = `${base}/`;
+  const IP = '192.0.2.20';   // golden v4: challenge side for every path
+
+  it('the challenge form posts under the basename and a solve passes', async () => {
+    const h = await readmeApp({ basename: base });
+    const page = await h(new Request(`http://app.test${FULL}`, { headers: HTML }), IP);
+    expect(page.status).toBe(403);
+    const html = await page.text();
+    expect(actionOf(html)).toBe('/app/_cam/challenge');
+    const nonce = nonceOf(html);
+    const body = `nonce=${nonce}&solution=${solve(nonce)}&to=${encodeURIComponent(FULL)}`;
+    const ok = await h(new Request(`http://app.test${actionOf(html)}`, { method: 'POST', headers: FORM, body }), IP);
+    expect(ok.status).toBe(302);
+    expect(ok.headers.get('location')).toBe(FULL);
+    const cookie = ok.headers.get('set-cookie')!.split(';')[0];
+    expect(cookie).toMatch(/^_cch=/);
+    expect((await h(new Request(`http://app.test${FULL}`, { headers: { ...HTML, cookie } }), IP)).status).toBe(200);
+  });
+
+  it('serves the beacon script and relay under the basename, and not outside it', async () => {
+    quiet();
+    const h = await readmeApp({ basename: base });
+    expect((await h(new Request('http://app.test/app/_cam/b.js'))).status).toBe(200);
+    expect((await h(new Request('http://app.test/_cam/b.js'))).status).toBe(404);
+  });
+
+  it('a .data navigation still gets the 204 redirect, basename not doubled', async () => {
+    const h = await readmeApp({ basename: base });
+    const res = await h(new Request(`http://app.test${base}/_.data`, { headers: { accept: '*/*', 'sec-fetch-dest': 'empty', 'sec-fetch-mode': 'cors' } }), IP);
+    expect(res.status).toBe(204);
+    expect(res.headers.get('x-remix-redirect')).toBe('/');
+  });
+
+  it('explicit paths win over the basename defaults', async () => {
+    const h = await readmeApp({ basename: base, scriptPath: '/app/x/b.js' });
+    const page = await (await h(new Request(`http://app.test${FULL}`, { headers: HTML }), IP)).text();
+    expect(actionOf(page)).toBe('/app/x/challenge');
+    const g = await readmeApp({ basename: base, challengePath: '/app/_cam/verify' });
+    expect(actionOf(await (await g(new Request(`http://app.test${FULL}`, { headers: HTML }), IP)).text())).toBe('/app/_cam/verify');
+  });
+});

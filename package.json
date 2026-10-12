@@ -15,7 +15,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "check:readme-build": "scripts/readme-build-check.sh"
   },
   "description": "camada SDK for React Router framework mode (Remix): snapshot enforcement in a root middleware, first-party challenge and beacon route, track() outcomes",
   "exports": {
