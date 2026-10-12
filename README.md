@@ -33,7 +33,9 @@ export default [
 // app/routes/cam.tsx
 import { camadaRoute } from '@camada/remix';
 
-export const { loader, action } = camadaRoute();
+const r = camadaRoute();
+export const loader = r.loader;   // plain consts: `export const { loader, action } = ...` fails
+export const action = r.action;   // `react-router build` ("Cannot remove destructured export")
 ```
 
 Env (printed by camada onboarding / `npm run seed` in dev):
@@ -148,12 +150,12 @@ the edge.
 | `snapshotUrl` | `<ingestUrl>/snapshot` | snapshot endpoint |
 | `trustedProxy` | server config | `none` / `vercel` / `hops:N` / `cidrs:a,b`, or the parsed object |
 | `challenge` | `true` | serve the proof-of-work page for `challenge` verdicts |
-| `challengePath` | `/_cam/challenge` (next to `scriptPath`) | where that page posts its solution; keep it under the route that calls `camadaRoute()` |
+| `challengePath` | `/_cam/challenge` (next to `scriptPath`; under `basename` if set) | where that page posts its solution; keep it under the route that calls `camadaRoute()` |
 | `snapshotVersion` | `5` | `4` drops the custom rules, `3` the allow/challenge sides too |
-| `scriptPath` | `/_cam/b.js` | where the first-party beacon script is served |
-| `fpPath` | `/_cam/fp` | where that script posts the beacon; keep it in `scriptPath`'s directory |
+| `scriptPath` | `/_cam/b.js` (`<basename>/_cam/b.js` if `basename` is set) | where the first-party beacon script is served |
+| `fpPath` | `/_cam/fp` (`<basename>/_cam/fp` if `basename` is set) | where that script posts the beacon; keep it in `scriptPath`'s directory |
 | `mode` | `lazy` (or `timer`) | `timer` polls the snapshot on an unref'd interval (long-lived process); `lazy` refreshes it per request off-path. `CAMADA_SERVERLESS=1` forces `lazy` |
-| `basename` | none | your React Router `basename` (react-router.config.ts). Set it when the app has one: the client adds it back to a challenged navigation's redirect, which would otherwise land on `/app/app/page` |
+| `basename` | none | your React Router `basename` (react-router.config.ts). Set it when the app has one (on `camada()` and `camadaRoute()` alike): the default `scriptPath`, `fpPath` and `challengePath` then live under it (`/app/_cam/b.js`, `/app/_cam/fp`, `/app/_cam/challenge`), and the client's redirect for a challenged navigation no longer lands on `/app/app/page`. An explicit path is used as given |
 | `env` | `process.env` | overrides the process env (tests, and apps that read config themselves) |
 
 `CAMADA_CHALLENGE=0` in the env switches the challenge off without a code change.
@@ -211,6 +213,12 @@ covers three endpoints:
 | `GET /_cam/b.js` | the beacon script |
 | `POST /_cam/fp` | the beacon relay |
 | `POST /_cam/challenge` | the challenge page's form: verifies the work and sets `_cch` |
+
+With a React Router `basename` (say `/app`) the URLs carry it: `/app/_cam/b.js`, `/app/_cam/fp`,
+`/app/_cam/challenge`. Pass `basename: '/app'` to both `camada()` and `camadaRoute()` and those
+are the defaults; the route itself stays `route('/_cam/*', ...)` in `routes.ts`, because the
+router matches routes after stripping the basename. Without the option the defaults sit outside
+the basename, the router 404s the challenge form, and no challenged visitor can pass.
 
 With the root middleware mounted it answers first, and the route's loader and action are the
 fallback (a middleware mounted lower, or none at all). They re-run the verdict, so a blocked

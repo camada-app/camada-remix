@@ -7,6 +7,14 @@ the challenge verify, camada-all-4u4i).
 
 ### Fixed
 
+- With a `basename`, the default `scriptPath`, `fpPath` and `challengePath` live under it
+  (`/app/_cam/b.js`, `/app/_cam/fp`, `/app/_cam/challenge`), in `camada()` and `camadaRoute()`
+  alike. Before, they sat outside the basename, so the challenge form posted to a URL React Router
+  404s and a challenged visitor could never pass. Explicit paths win.
+- README: the route module uses plain `export const loader = r.loader` / `action = r.action`;
+  `export const { loader, action } = camadaRoute()` fails `react-router build` ("Cannot remove
+  destructured export"). A script (`npm run check:readme-build`) builds an app from the README's
+  route module. (camada-all-xms0)
 - A custom Express server can pass its `res` in the new `camadaResponseContext` (from
   `getLoadContext(req, res)`). Before camada answers a request itself it removes from `res` the
   headers its answer sets, because `@react-router/express` appends: with helmet in front, the

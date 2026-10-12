@@ -40,8 +40,18 @@ export function instanceFor(given: CamadaRemixOptions = {}): FetchCamada {
   // default (`/_cam/challenge`, or next to a custom `scriptPath`), where camadaRoute() matches and
   // the root middleware answers. Core's own default, `/__camada/challenge`, would 404 in the
   // router before camada ever ran (camada-all-zhoc).
-  const { basename: _basename, ...core } = given;   // the adapter's own option: not core's, and not part of the engine's identity
-  const opts = { ...core, challengePath: core.challengePath ?? inScriptDir(core.scriptPath, 'challenge') };
+  const { basename, ...core } = given;   // the adapter's own option: not core's, and part of the engine's identity only through the paths it moves
+  // Under a `basename` the router strips it before matching, so the endpoints' URLs (what the
+  // browser requests and core compares) carry it: the defaults live under it (camada-all-xms0).
+  const base = (basename ?? '').replace(/\/+$/, '');
+  const scriptPath = core.scriptPath ?? (base ? `${base}/_cam/b.js` : undefined);
+  const fpPath = core.fpPath ?? (base && !core.scriptPath ? `${base}/_cam/fp` : undefined);
+  const opts = {
+    ...core,
+    ...(scriptPath ? { scriptPath } : {}),
+    ...(fpPath ? { fpPath } : {}),
+    challengePath: core.challengePath ?? inScriptDir(scriptPath, 'challenge'),
+  };
   const { fetchImpl, ...serialisable } = opts;
   const key = sortedJson(serialisable);
   let bucket = byKey.get(fetchImpl);
