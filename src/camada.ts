@@ -6,13 +6,18 @@
 // its own isolate open. A camada bug, a dead ingest or a corrupt snapshot costs telemetry,
 // never the app's response.
 import iife from '@camada/browser/iife-string';
-import { guarded, TAP_REMIX } from '@camada/core';
+import { guarded, safeReturnTo, TAP_REMIX } from '@camada/core';
 import { createFetchCamada, withSetCookie, withRid, type FetchCamada, type FetchCamadaOptions, type FetchRequestContext, type FetchVars } from '@camada/core/fetch';
 import type { MiddlewareFunction } from 'react-router';
 import { camadaContext, camadaPeerContext, type RouterContext } from './context.js';
 import { SDK_ID } from './version.js';
 
-export type CamadaRemixOptions = FetchCamadaOptions;
+export interface CamadaRemixOptions extends FetchCamadaOptions {
+  /** The app's React Router `basename` (react-router.config.ts), when it has one. The client puts
+   *  it back in front of a redirect, so a challenged data request's `X-Remix-Redirect` goes out
+   *  without it. */
+  basename?: string;
+}
 export type CamadaRemixVars = FetchVars;
 
 // camada() and camadaRoute() must see one engine for the same options, or the route would poll
@@ -26,15 +31,17 @@ const byKey = new Map<typeof fetch | undefined, Map<string, FetchCamada>>();
 const sortedJson = (v: unknown): string =>
   JSON.stringify(v, (_, x: unknown) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x));
 
-/** React Router runs middleware only for a matched route, and the beacon route (`/_cam/*` in the
- *  README) is the one camada can count on: the challenge form posts into that directory by
- *  default (`/_cam/challenge`, or next to a custom `scriptPath`), where camadaRoute() matches and
- *  the root middleware answers. Core's own default, `/__camada/challenge`, would 404 in the
- *  router before camada ever ran (camada-all-zhoc). */
-export const defaultChallengePath = (scriptPath = '/_cam/b.js'): string => scriptPath.replace(/[^/]*$/, 'challenge');
+/** The directory of the beacon script, `/_cam/` by default: a path in it with `name` last. */
+export const inScriptDir = (scriptPath: string | undefined, name: string): string => (scriptPath ?? '/_cam/b.js').replace(/[^/]*$/, name);
 
 export function instanceFor(given: CamadaRemixOptions = {}): FetchCamada {
-  const opts = { ...given, challengePath: given.challengePath ?? defaultChallengePath(given.scriptPath) };
+  // React Router runs middleware only for a matched route, and the beacon route (`/_cam/*` in the
+  // README) is the one camada can count on: the challenge form posts into that directory by
+  // default (`/_cam/challenge`, or next to a custom `scriptPath`), where camadaRoute() matches and
+  // the root middleware answers. Core's own default, `/__camada/challenge`, would 404 in the
+  // router before camada ever ran (camada-all-zhoc).
+  const { basename: _basename, ...core } = given;   // the adapter's own option: not core's, and not part of the engine's identity
+  const opts = { ...core, challengePath: core.challengePath ?? inScriptDir(core.scriptPath, 'challenge') };
   const { fetchImpl, ...serialisable } = opts;
   const key = sortedJson(serialisable);
   let bucket = byKey.get(fetchImpl);
@@ -62,31 +69,59 @@ export function requestContext(context: RouterContext): FetchRequestContext {
   };
 }
 
+/** `path` without the router's basename, or null when it lies outside it. */
+function underBasename(path: string, basename: string | undefined): string | null {
+  const base = (basename ?? '').replace(/\/+$/, '');
+  if (!base) return path;
+  if (path === base) return '/';
+  return path.startsWith(base + '/') ? path.slice(base.length) : null;
+}
+
 /** A challenged client-side navigation: React Router's client fetches `<path>.data` (`/_.data` for a
  *  path ending in `/`) and throws any 4xx without `X-Remix-Response` into the route's error
  *  boundary, so core's 403 JSON would show the app's error page, never the challenge. Answer it
- *  in React Router's single-fetch redirect form instead: 204 + `X-Remix-Redirect` to the page
- *  itself + `X-Remix-Reload-Document`, which the client turns into a document navigation
- *  (`window.location.assign`) that meets the HTML challenge (camada-all-wjln). Any other answer,
- *  and every request that is not a `.data` fetch (an API call from app code), is left as it is. */
-export function forNavigation(req: Request, res: Response): Response {
+ *  in React Router's single-fetch redirect form instead: 204 + `X-Remix-Redirect` +
+ *  `X-Remix-Reload-Document`, which the client turns into a document navigation
+ *  (`window.location.assign`) that meets the HTML challenge (camada-all-wjln). A GET reloads the
+ *  page itself. A non-GET (`fetcher.submit`, `fetcher.load` of a resource route, `<Form
+ *  action=/other>`) targets a route that may have no page, so it reloads the same-origin page it
+ *  came from (the Referer), else the data path. The location goes out without the router's
+ *  basename, which the client adds back. Any other answer, and every request that is not a
+ *  `.data` fetch (an API call from app code), is left as it is. */
+export function forNavigation(req: Request, res: Response, basename?: string): Response {
   return guarded(() => {
     if (res.status !== 403 || res.headers.get('x-camada-challenge') !== '1') return res;
     const url = new URL(req.url);
     if (!url.pathname.endsWith('.data')) return res;
     url.pathname = url.pathname.endsWith('/_.data') ? url.pathname.slice(0, -'_.data'.length)
-      : url.pathname === '/_root.data' ? '/'   // Remix v2's spelling of the root
+      : url.pathname.endsWith('/_root.data') ? url.pathname.slice(0, -'_root.data'.length)   // Remix v2's spelling of the root
       : url.pathname.slice(0, -'.data'.length);
     url.searchParams.delete('_routes');
+    let to = underBasename(url.pathname, basename) ?? '/';
+    to = safeReturnTo(to + url.search);
+    if (req.method !== 'GET' && req.method !== 'HEAD') to = fromReferer(req, url.origin, basename) ?? to;
     void res.body?.cancel().catch(() => {});
     return new Response(null, {
       status: 204,
       headers: {
-        'X-Remix-Redirect': url.pathname + url.search, 'X-Remix-Status': '302', 'X-Remix-Reload-Document': 'true',
+        'X-Remix-Redirect': to, 'X-Remix-Status': '302', 'X-Remix-Reload-Document': 'true',
         'cache-control': 'no-store', 'x-camada-challenge': '1',
       },
     });
   }, res);
+}
+
+/** The same-origin Referer's path and query (without the basename), when it is a safe return target. */
+function fromReferer(req: Request, origin: string, basename: string | undefined): string | null {
+  const raw = req.headers.get('referer');
+  if (!raw) return null;
+  let ref: URL;
+  try { ref = new URL(raw); } catch { return null; }
+  if (ref.origin !== origin) return null;
+  const path = underBasename(ref.pathname, basename);
+  if (path === null) return null;
+  const to = path + ref.search;
+  return safeReturnTo(to) === to ? to : null;
 }
 
 export function camada(opts: CamadaRemixOptions = {}): MiddlewareFunction<Response> {
@@ -94,7 +129,7 @@ export function camada(opts: CamadaRemixOptions = {}): MiddlewareFunction<Respon
   return async ({ request, context }, next) => {
     const r = await cam.before(request, requestContext(context));
     if (!r) return next();
-    if (r.response) return forNavigation(request, r.response);   // block, challenge, verify, beacon: answered without the app
+    if (r.response) return forNavigation(request, r.response, opts.basename);   // block, challenge, verify, beacon: answered without the app
     guarded(() => context.set(camadaContext, r.vars), undefined);
     let res: Response;
     try {

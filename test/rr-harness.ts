@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequestHandler, RouterContextProvider, type ServerBuild } from 'react-router';
 import { camada, camadaRoute, camadaPeerContext, type CamadaRemixOptions } from '../src/index.js';
+import { inScriptDir } from '../src/camada.js';
 
 const FIX = fileURLToPath(new URL('../node_modules/@camada/core/test/fixtures/blk3/', import.meta.url));
 const meta = readFileSync(FIX + 'v4-basic.meta.json');
@@ -29,7 +30,7 @@ export type Handler = (req: Request, peer?: string) => Promise<Response>;
 export async function readmeApp(extra: CamadaRemixOptions = {}): Promise<Handler> {
   const opts: CamadaRemixOptions = { env: { CAMADA_KEY: 'tok-acme.snap-acme', CAMADA_INGEST_URL: 'http://analyst.test', CAMADA_SNAPSHOT_URL: 'http://analyst.test/snapshot' }, fetchImpl, ...extra };
   const cam = camadaRoute(opts);
-  const camDir = (extra.scriptPath ?? '/_cam/b.js').replace(/[^/]*$/, '*');
+  const camDir = inScriptDir(extra.scriptPath, '*');
   const build = {
     entry: { module: { default: (_req: Request, status: number, headers: Headers) => new Response(`app document, status ${status}`, { status, headers }) } },
     routes: {
@@ -41,6 +42,7 @@ export async function readmeApp(extra: CamadaRemixOptions = {}): Promise<Handler
     },
     assets: { routes: {}, entry: { module: '/e.js', imports: [] }, url: '/m.js', version: '1' },
     publicPath: '/', assetsBuildDirectory: '/tmp', future: {}, ssr: true, isSpaMode: false, prerender: [],
+    ...(extra.basename ? { basename: extra.basename } : {}),   // react-router.config.ts `basename`, as the build carries it
     routeDiscovery: { mode: 'lazy', manifestPath: '/__manifest' },
   } as unknown as ServerBuild;
   const handler = createRequestHandler(build, 'production');
@@ -49,7 +51,7 @@ export async function readmeApp(extra: CamadaRemixOptions = {}): Promise<Handler
     c.set(camadaPeerContext, peer);
     return handler(req, c);
   };
-  await h(new Request('http://app.test/'));   // cold: loads the snapshot
+  await h(new Request(`http://app.test${extra.basename ?? ''}/`));   // cold: loads the snapshot
   for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0));
   return h;
 }
