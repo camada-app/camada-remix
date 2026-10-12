@@ -59,4 +59,34 @@ describe('challenged navigation data requests (camada-all-wjln)', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('x-remix-redirect')).toBeNull();
   });
+
+  it('with a basename, strips it before X-Remix-Redirect: the client puts it back (R4-3)', async () => {
+    const h = await readmeApp({ basename: '/app' });
+    const res = await h(new Request(`http://app.test/app${CHALLENGED_PATH}.data`, { headers: DATA }), CHALLENGED_IP);
+    expect(res.status).toBe(204);
+    expect(res.headers.get('x-remix-redirect')).toBe(CHALLENGED_PATH);
+    const root = await h(new Request('http://app.test/app/_.data', { headers: DATA }), CHALLENGED_IP);
+    expect(root.headers.get('x-remix-redirect')).toBe('/');
+  });
+
+  it('a challenged non-GET .data (fetcher.submit, <Form action>) reloads the page it came from, not the data URL (R4-4)', async () => {
+    const h = await readmeApp();
+    const post = (headers: Record<string, string>) => h(new Request('http://app.test/api/thing.data', {
+      method: 'POST', headers: { ...DATA, 'content-type': 'application/x-www-form-urlencoded', ...headers }, body: 'a=1',
+    }), CHALLENGED_IP);
+    const res = await post({ referer: `http://app.test${CHALLENGED_PATH}?tab=2` });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('x-remix-redirect')).toBe(`${CHALLENGED_PATH}?tab=2`);
+    // No Referer, or one from another origin: the data path is all there is.
+    expect((await post({})).headers.get('x-remix-redirect')).toBe('/api/thing');
+    expect((await post({ referer: 'https://evil.test/phish' })).headers.get('x-remix-redirect')).toBe('/api/thing');
+  });
+
+  it('a non-GET under a basename takes the Referer path without the basename', async () => {
+    const h = await readmeApp({ basename: '/app' });
+    const res = await h(new Request('http://app.test/app/api/thing.data', {
+      method: 'POST', headers: { ...DATA, referer: `http://app.test/app${CHALLENGED_PATH}` }, body: 'a=1',
+    }), CHALLENGED_IP);
+    expect(res.headers.get('x-remix-redirect')).toBe(CHALLENGED_PATH);
+  });
 });

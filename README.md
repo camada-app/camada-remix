@@ -85,7 +85,8 @@ fill one event queue. Two mounts with different keys or URLs each get their own.
    `<path>.data` for a `<Link>`) is answered in React Router's own redirect form instead
    (`204` + `X-Remix-Redirect` to the same page + `X-Remix-Reload-Document`), so the browser
    reloads the page as a document and meets the challenge, rather than your error boundary
-   rendering a 403.
+   rendering a 403. A challenged submission (`fetcher.submit`, `<Form action>`, any non-GET
+   `.data`) reloads the same-origin page it came from (its `Referer`), else the data path.
 7. Otherwise `next()` runs your loaders and actions, and the settled response ships one
    batched, redacted event with its real status (Authorization and Cookie values never leave
    the process; credential-looking query values are scrubbed — see `@camada/core`). A first
@@ -140,6 +141,7 @@ the edge.
 | `scriptPath` | `/_cam/b.js` | where the first-party beacon script is served |
 | `fpPath` | `/_cam/fp` | where that script posts the beacon; keep it in `scriptPath`'s directory |
 | `mode` | `lazy` (or `timer`) | `timer` polls the snapshot on an unref'd interval (long-lived process); `lazy` refreshes it per request off-path. `CAMADA_SERVERLESS=1` forces `lazy` |
+| `basename` | none | your React Router `basename` (react-router.config.ts). Set it when the app has one: the client adds it back to a challenged navigation's redirect, which would otherwise land on `/app/app/page` |
 | `env` | `process.env` | overrides the process env (tests, and apps that read config themselves) |
 
 `CAMADA_CHALLENGE=0` in the env switches the challenge off without a code change.

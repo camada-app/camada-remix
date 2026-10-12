@@ -14,7 +14,15 @@ the challenge verify, camada-all-4u4i).
 - A client-side navigation to a challenged route (`<path>.data`) gets React Router's
   reload-document redirect to the same page instead of a `403` JSON that the route's error
   boundary rendered. The document request then shows the challenge. API and `fetch()` calls
-  still get the `403` JSON (camada-all-wjln).
+  still get the `403` JSON (camada-all-wjln). A challenged non-GET `.data` (`fetcher.submit`,
+  `<Form action=/other>`) reloads the same-origin page it came from (its `Referer`) rather than
+  a resource route's URL.
+
+### Added
+
+- `basename` option: the app's React Router `basename`. The challenged-navigation redirect goes
+  out without it, since the client adds it back (without the option a `/app` app lands on
+  `/app/app/page`).
 
 ### Docs
 

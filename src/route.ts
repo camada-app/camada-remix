@@ -12,7 +12,7 @@ export function camadaRoute(opts: CamadaRemixOptions = {}): { loader: Handler<Lo
   const cam = instanceFor(opts);
   const answer: Handler<LoaderFunctionArgs | ActionFunctionArgs> = async ({ request, context }) => {
     const r = await cam.before(request, requestContext(context));
-    return r?.response ? forNavigation(request, r.response) : new Response(null, { status: 404 });   // not a beacon path, or camada inert: nothing to serve
+    return r?.response ? forNavigation(request, r.response, opts.basename) : new Response(null, { status: 404 });   // not a beacon path, or camada inert: nothing to serve
   };
   return { loader: answer, action: answer };
 }
