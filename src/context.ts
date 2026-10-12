@@ -15,6 +15,12 @@ export const camadaContext = createContext<FetchVars | null>(null);
 /** The socket address a custom server vouches for (set from `getLoadContext`); null = nothing vouched. */
 export const camadaPeerContext = createContext<string | null>(null);
 
+/** The Node response a custom server hands camada (Express's `res`, set from `getLoadContext(req, res)`).
+ *  @react-router/express writes an answer's headers with `res.append`, so a header an Express
+ *  middleware already set (helmet's Content-Security-Policy) would go out twice; with this, camada
+ *  removes the ones its own answer replaces first. Null = nothing handed over. */
+export const camadaResponseContext = createContext<{ removeHeader(name: string): void } | null>(null);
+
 /** Loaders, actions and middleware all receive the same read-only provider. */
 export type RouterContext = Readonly<RouterContextProvider>;
 

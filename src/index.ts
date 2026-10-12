@@ -5,4 +5,4 @@
 //   track(context, 'login_failed', { user })           // in an action: an outcome the wire cannot show
 export { camada, resetCamada, type CamadaRemixOptions, type CamadaRemixVars } from './camada.js';
 export { camadaRoute } from './route.js';
-export { track, scriptTag, camadaPeerContext } from './context.js';
+export { track, scriptTag, camadaPeerContext, camadaResponseContext } from './context.js';

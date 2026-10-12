@@ -28,6 +28,19 @@ export type Handler = (req: Request, peer?: string) => Promise<Response>;
 
 /** The README's app, with `extra` camada options on both the middleware and the route. */
 export async function readmeApp(extra: CamadaRemixOptions = {}): Promise<Handler> {
+  const handler = createRequestHandler(readmeBuild(extra), 'production');
+  const h: Handler = async (req, peer = '8.8.8.8') => {
+    const c = new RouterContextProvider();
+    c.set(camadaPeerContext, peer);
+    return handler(req, c);
+  };
+  await h(new Request(`http://app.test${extra.basename ?? ''}/`));   // cold: loads the snapshot
+  for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0));
+  return h;
+}
+
+/** The README's ServerBuild, for a host that brings its own request handler (an Express server). */
+export function readmeBuild(extra: CamadaRemixOptions = {}): ServerBuild {
   const opts: CamadaRemixOptions = { env: { CAMADA_KEY: 'tok-acme.snap-acme', CAMADA_INGEST_URL: 'http://analyst.test', CAMADA_SNAPSHOT_URL: 'http://analyst.test/snapshot' }, fetchImpl, ...extra };
   const cam = camadaRoute(opts);
   const camDir = inScriptDir(extra.scriptPath, '*');
@@ -45,13 +58,5 @@ export async function readmeApp(extra: CamadaRemixOptions = {}): Promise<Handler
     ...(extra.basename ? { basename: extra.basename } : {}),   // react-router.config.ts `basename`, as the build carries it
     routeDiscovery: { mode: 'lazy', manifestPath: '/__manifest' },
   } as unknown as ServerBuild;
-  const handler = createRequestHandler(build, 'production');
-  const h: Handler = async (req, peer = '8.8.8.8') => {
-    const c = new RouterContextProvider();
-    c.set(camadaPeerContext, peer);
-    return handler(req, c);
-  };
-  await h(new Request(`http://app.test${extra.basename ?? ''}/`));   // cold: loads the snapshot
-  for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0));
-  return h;
+  return build;
 }
