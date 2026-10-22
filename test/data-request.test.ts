@@ -45,12 +45,11 @@ describe('challenged navigation data requests (camada-all-wjln)', () => {
     expect(res.headers.get('content-type')).toContain('text/html');
   });
 
-  it('an API/fetch request from app code still gets the 403 JSON', async () => {
+  it('an API/fetch request from app code reaches the app, carrying the challenge signal', async () => {
     const h = await readmeApp();
     const res = await h(new Request('http://app.test/api/thing', { headers: { accept: 'application/json' } }), CHALLENGED_IP);
-    expect(res.status).toBe(403);
-    expect(res.headers.get('content-type')).toBe('application/json');
-    expect(await res.text()).toBe('{"error":"challenge_required"}');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-camada-challenge')).toBe('1');
   });
 
   it('an unchallenged data request is the app\'s own single-fetch answer', async () => {

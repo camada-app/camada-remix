@@ -87,6 +87,10 @@ function underBasename(path: string, basename: string | undefined): string | nul
   return path.startsWith(base + '/') ? path.slice(base.length) : null;
 }
 
+/** Whether `pathname` is React Router's client fetching `<path>.data` (any method). */
+const isDataPath = (pathname: string): boolean => pathname.endsWith('.data');
+const isDataRequest = (req: Request): boolean => isDataPath(new URL(req.url).pathname);
+
 /** A challenged client-side navigation: React Router's client fetches `<path>.data` (`/_.data` for a
  *  path ending in `/`) and throws any 4xx without `X-Remix-Response` into the route's error
  *  boundary, so core's 403 JSON would show the app's error page, never the challenge. Answer it
@@ -97,12 +101,12 @@ function underBasename(path: string, basename: string | undefined): string | nul
  *  action=/other>`) targets a route that may have no page, so it reloads the same-origin page it
  *  came from (the Referer), else the data path. The location goes out without the router's
  *  basename, which the client adds back. Any other answer, and every request that is not a
- *  `.data` fetch (an API call from app code), is left as it is. */
+ *  `.data` fetch, is left as it is. */
 export function forNavigation(req: Request, res: Response, basename?: string): Response {
   return guarded(() => {
     if (res.status !== 403 || res.headers.get('x-camada-challenge') !== '1') return res;
     const url = new URL(req.url);
-    if (!url.pathname.endsWith('.data')) return res;
+    if (!isDataPath(url.pathname)) return res;
     url.pathname = url.pathname.endsWith('/_.data') ? url.pathname.slice(0, -'_.data'.length)
       : url.pathname.endsWith('/_root.data') ? url.pathname.slice(0, -'_root.data'.length)   // Remix v2's spelling of the root
       : url.pathname.slice(0, -'.data'.length);
@@ -152,7 +156,7 @@ function fromReferer(req: Request, origin: string, basename: string | undefined)
 export function camada(opts: CamadaRemixOptions = {}): MiddlewareFunction<Response> {
   const cam = instanceFor(opts);
   return async ({ request, context }, next) => {
-    const r = await cam.before(request, requestContext(context));
+    const r = await cam.before(request, { ...requestContext(context), navigation: isDataRequest(request) });
     if (!r) return next();
     if (r.response) return answered(request, context, r.response, opts.basename);   // block, challenge, verify, beacon: answered without the app
     guarded(() => context.set(camadaContext, r.vars), undefined);
