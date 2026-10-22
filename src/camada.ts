@@ -87,8 +87,9 @@ function underBasename(path: string, basename: string | undefined): string | nul
   return path.startsWith(base + '/') ? path.slice(base.length) : null;
 }
 
-/** Whether `req` is React Router's client fetching `<path>.data` (any method). */
-const isDataRequest = (req: Request): boolean => new URL(req.url).pathname.endsWith('.data');
+/** Whether `pathname` is React Router's client fetching `<path>.data` (any method). */
+const isDataPath = (pathname: string): boolean => pathname.endsWith('.data');
+const isDataRequest = (req: Request): boolean => isDataPath(new URL(req.url).pathname);
 
 /** A challenged client-side navigation: React Router's client fetches `<path>.data` (`/_.data` for a
  *  path ending in `/`) and throws any 4xx without `X-Remix-Response` into the route's error
@@ -105,7 +106,7 @@ export function forNavigation(req: Request, res: Response, basename?: string): R
   return guarded(() => {
     if (res.status !== 403 || res.headers.get('x-camada-challenge') !== '1') return res;
     const url = new URL(req.url);
-    if (!url.pathname.endsWith('.data')) return res;
+    if (!isDataPath(url.pathname)) return res;
     url.pathname = url.pathname.endsWith('/_.data') ? url.pathname.slice(0, -'_.data'.length)
       : url.pathname.endsWith('/_root.data') ? url.pathname.slice(0, -'_root.data'.length)   // Remix v2's spelling of the root
       : url.pathname.slice(0, -'.data'.length);
