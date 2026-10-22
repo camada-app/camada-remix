@@ -81,8 +81,9 @@ fill one event queue. Two mounts with different keys or URLs each get their own.
    before `next()`; the event still ships, with `st: 403` and `blk: <reason>` so the analyst
    counts SDK blocks apart from your own 403s.
 5. **Skip** → a skip rule or the allow list wins over a wider block.
-6. **Challenge** → a `403` proof-of-work page for HTML navigations, `403
-   {"error":"challenge_required"}` for API and `fetch()` calls; `POST /_cam/challenge` verifies
+6. **Challenge** → a `403` proof-of-work page for HTML navigations; API and
+   `fetch()` calls pass to your app with `x-camada-challenge: 1` on the response (and `chs: 1` on the
+   event) so your frontend can choose to challenge; `POST /_cam/challenge` verifies
    the work, sets `_cch` and 302s back. A client-side navigation (React Router fetching
    `<path>.data` for a `<Link>`) is answered in React Router's own redirect form instead
    (`204` + `X-Remix-Redirect` to the same page + `X-Remix-Reload-Document`), so the browser
