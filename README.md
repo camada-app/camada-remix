@@ -1,9 +1,11 @@
 # @camada/remix
 
+[Frameworks](https://www.camada.app/frameworks) · [Docs](https://www.camada.app/docs) · [Bot detection](https://www.camada.app/bot-detection) · [Bot signal test](https://www.camada.app/tools/bot-test) · [Pricing](https://www.camada.app/pricing).
+
 camada for [React Router](https://reactrouter.com) framework mode (the Remix lineage): enforces
 the tenant snapshot in a root server middleware (your ordered custom rules, then block, allow,
 challenge), serves a first-party proof-of-work challenge page and beacon, and records the
-outcomes your actions know (`track()`). Fails open by design — a camada outage or bug never
+outcomes your actions know (`track()`). Fails open by design: a camada outage or bug never
 5xxes your app.
 
 ```sh
@@ -61,8 +63,8 @@ export default { future: { v8_middleware: true } };
 Without `CAMADA_KEY` the middleware is inert (one log line, no requests, no enforcement), so an
 unprovisioned environment behaves exactly as if camada were not installed.
 
-`camada()` and `camadaRoute()` share one engine per configuration — the same options object,
-or two that spell the same options — so the middleware and the route poll one snapshot and
+`camada()` and `camadaRoute()` share one engine per configuration (the same options object,
+or two that spell the same options), so the middleware and the route poll one snapshot and
 fill one event queue. Two mounts with different keys or URLs each get their own.
 
 ## What it does per request
@@ -71,7 +73,7 @@ fill one event queue. Two mounts with different keys or URLs each get their own.
    the request does not wait for it; `mode: 'timer'` polls on an unref'd interval and drains
    the queue on exit for a long-lived Node server). Every poll and event batch carries
    `x-camada-sdk: @camada/remix/<version>`, and polls ask for snapshot v5
-   (`x-camada-snapshot: 5`) — the container that carries your ordered custom rules.
+   (`x-camada-snapshot: 5`), the container that carries your ordered custom rules.
 2. Resolves the client from the peer your server vouched for (see below), falling back to
    `X-Forwarded-For` only under your tenant's trusted-proxy config. A bare header is never
    trusted: without a vouched peer and a trusted-proxy config the ip is `null`, ip rules do not
@@ -92,7 +94,7 @@ fill one event queue. Two mounts with different keys or URLs each get their own.
    `.data`) reloads the same-origin page it came from (its `Referer`), else the data path.
 7. Otherwise `next()` runs your loaders and actions, and the settled response ships one
    batched, redacted event with its real status (Authorization and Cookie values never leave
-   the process; credential-looking query values are scrubbed — see `@camada/core`). A first
+   the process; credential-looking query values are scrubbed; see `@camada/core`). A first
    visit gets the `_sfp` session cookie, appended even to a `redirect()` whose headers are
    immutable.
 
@@ -130,8 +132,8 @@ report-only policy under the challenge page's own. Set-Cookie headers are left a
 mount helmet after the React Router handler, or set your policy from React Router's
 `entry.server` / route `headers` instead of Express.
 
-Behind a load balancer, set `CAMADA_TRUSTED_PROXY=hops:1` (or `cidrs:…`) — or the
-`trustedProxy` option — and `X-Forwarded-For` is read one hop behind that peer. Never put a
+Behind a load balancer, set `CAMADA_TRUSTED_PROXY=hops:1` (or `cidrs:…`), or the
+`trustedProxy` option, and `X-Forwarded-For` is read one hop behind that peer. Never put a
 header value in `camadaPeerContext`: that is the one address camada takes on faith.
 
 Without a vouched peer (no `camadaPeerContext`, e.g. on a serverless host), this adapter keeps
@@ -167,7 +169,7 @@ the edge.
 
 Bots that never run JavaScript are the cheapest to catch. Put the tag in the pages you render
 and the middleware does the rest. The helper returns markup, so render it through a wrapper
-at the end of `<body>` — it is part of the server-rendered document, and the browser runs it
+at the end of `<body>`: it is part of the server-rendered document, and the browser runs it
 on parse (an element cannot be dangerously-set inside `<head>` next to `<Meta />`):
 
 ```tsx
@@ -194,10 +196,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 ```
 
-`scriptTag(context)` returns `<script src="/_cam/b.js?r=<rid>" async></script>` — the `rid` is
+`scriptTag(context)` returns `<script src="/_cam/b.js?r=<rid>" async></script>`: the `rid` is
 this request's event id, so the analyst joins the beacon to the page view. The middleware
 serves the script at `GET /_cam/b.js` (cacheable, 1 h) and relays `POST /_cam/fp` (≤ 32 KB,
-answers 204) onto the event batch as a `sig: 1` row stamped with the client ip camada resolved —
+answers 204) onto the event batch as a `sig: 1` row stamped with the client ip camada resolved,
 never the one the body claims. Both endpoints sit behind the verdict: a blocked client gets 403
 there too. The tag is `''` when camada is off for the request or the project turned the beacon
 off in its settings, and the endpoints stand down with it.
@@ -253,7 +255,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 ```
 
 `track(context, event, { user? })` ships `{ et, uid, rid, sid, ip, ts }` joined to this
-request's event. The user identifier is HMAC-hashed in-process with the ingest token — the raw
+request's event. The user identifier is HMAC-hashed in-process with the ingest token: the raw
 value never leaves the process. It never throws and is a no-op where the middleware did not
 run. The event name is free-form; the analyst's rules read this vocabulary:
 
@@ -270,8 +272,8 @@ run. The event name is free-form; the analyst's rules read this vocabulary:
 
 The in-app position: the beacon, the client hints and headers the request carries, the real
 response status, the `_sfp` session, and the outcomes your actions report through `track()`.
-What it cannot see is the connection. React Router vouches for nothing below the `Request` —
-no socket address, no ASN, country, TLS fingerprint or client protocol — so those come only
+What it cannot see is the connection. React Router vouches for nothing below the `Request`
+(no socket address, no ASN, country, TLS fingerprint or client protocol), so those come only
 from what your server puts in `camadaPeerContext` (the address) and from a trusted-proxy
 config (`X-Forwarded-For`). ASN, country and `tlsx` rules do not fire at this tap. Header order is normalised by the `Headers` API before camada sees it, so the
 raw-wire-order signal is not available here either.
@@ -280,3 +282,13 @@ raw-wire-order signal is not available here either.
 
 Every entry point runs inside camada's guard. A dead ingest, a corrupt snapshot, a bug in this
 package, a context that is not a `RouterContextProvider`: telemetry is lost, the request is not.
+
+## Docs and links
+
+Read the guides on [camada.app](https://www.camada.app/docs).
+
+- [Frameworks](https://www.camada.app/frameworks): browse all server SDKs and Web-fetch adapters.
+- [Custom rules](https://www.camada.app/docs/rules) and [Challenge](https://www.camada.app/docs/challenge): order your rules and tune browser checks.
+- [Bot detection](https://www.camada.app/bot-detection): see how snapshots, beacons, and `track()` catch bots.
+- [Bot signal test](https://www.camada.app/tools/bot-test): check live browser, HTTP, and TLS signals from your client.
+- [Pricing](https://www.camada.app/pricing): compare the free tier and paid plans.

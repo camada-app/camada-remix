@@ -19,6 +19,29 @@
     "check:readme-build": "scripts/readme-build-check.sh"
   },
   "description": "camada SDK for React Router framework mode (Remix): snapshot enforcement in a root middleware, first-party challenge and beacon route, track() outcomes",
+  "homepage": "https://www.camada.app/frameworks",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/camada-app/camada-remix.git"
+  },
+  "bugs": {
+    "url": "https://github.com/camada-app/camada-remix/issues"
+  },
+  "keywords": [
+    "camada",
+    "remix",
+    "react-router",
+    "react",
+    "middleware",
+    "bot-detection",
+    "bot-protection",
+    "credential-stuffing",
+    "account-takeover",
+    "rate-limiting",
+    "proof-of-work",
+    "ai-scraper",
+    "security"
+  ],
   "exports": {
     ".": {
       "import": {
