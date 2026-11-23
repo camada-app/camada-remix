@@ -93,8 +93,9 @@ fill one event queue. Two mounts with different keys or URLs each get their own.
    rendering a 403. A challenged submission (`fetcher.submit`, `<Form action>`, any non-GET
    `.data`) reloads the same-origin page it came from (its `Referer`), else the data path.
 7. Otherwise `next()` runs your loaders and actions, and the settled response ships one
-   batched, redacted event with its real status (Authorization and Cookie values never leave
-   the process; credential-looking query values are scrubbed; see `@camada/core`). A first
+   batched, redacted event with its real status. Authorization contributes its scheme and,
+   with opt-in `tokenHash`, a keyed credential hash as `tk`. Authorization and Cookie values
+   stay in the process, and credential-looking query values are scrubbed. A first
    visit gets the `_sfp` session cookie, appended even to a `redirect()` whose headers are
    immutable.
 
@@ -164,6 +165,26 @@ the edge.
 `CAMADA_CHALLENGE=0` in the env switches the challenge off without a code change.
 
 `CAMADA_DISABLED=1` in the env switches everything off, checked per request.
+
+## Credential hash (opt-in, off by default)
+
+Set `tokenHash: true` or `CAMADA_TOKEN_HASH=1` to include `tk` on request
+events with an eligible credential. An explicit `tokenHash: false` overrides
+the environment variable.
+
+`tk` is the first 32 hex characters of HMAC-SHA256, keyed with your ingest
+token, over `tok:` plus the credential. The credential is the part of
+`Authorization` after the scheme (for example, the Bearer token). Set
+`tokenHeader: 'x-api-key'` or `CAMADA_TOKEN_HEADER` to prefer the whole value
+of that header when it contains an eligible credential. The credential itself
+stays in the process. Values shorter than 8 characters or outside printable
+ASCII are skipped.
+
+camada uses `tk` to spot one credential replayed from many clients. Enable it
+for random tokens or API keys. Avoid enabling it for human passwords over
+Basic auth because anyone holding both your events and your ingest token
+could test password guesses against the hash. Rotating the ingest token
+changes every `tk`.
 
 ## The first-party beacon
 
